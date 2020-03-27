@@ -1,7 +1,7 @@
 corona
 ==============================
 
-A short description of the project.
+Au secours, Corona arrive
 
 Project Organization
 ------------
