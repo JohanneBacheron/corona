@@ -9,7 +9,8 @@ import dash
 import dash_core_components as dcc
 import dash_html_components as html
 from dash.dependencies import Input, Output
-
+from scipy.integrate import solve_ivp
+import matplotlib.pylab as plt
 
 # Lecture du fichier d'environnement
 ENV_FILE = '../env.yaml'
@@ -29,9 +30,13 @@ epidemie_df = (pd.read_csv(DATA_FILE, parse_dates=['Last Update'])
                [lambda df: df['day'] <= datetime.date(2020, 3, 10)]
               )
 
+
+
 countries = [{'label': c, 'value': c} for c in sorted(epidemie_df['Country/Region'].unique())]
 
+
 app = dash.Dash('Corona Virus Explorer')
+
 app.layout = html.Div([
     html.H1(['Corona Virus Explorer'], style={'textAlign': 'center'}),
     dcc.Tabs([
@@ -75,8 +80,39 @@ app.layout = html.Div([
                 marks={i:str(i) for i, date in enumerate(epidemie_df['day'].unique())}
             )  
         ]),
+        dcc.Tab(label='Model SIR', children=[
+            html.Div([
+                dcc.Dropdown(
+                    id='pays',
+                    options=countries
+                )
+            ]),
+            html.Div([
+                dcc.Input(
+                    placeholder='Enter a value for beta', type='number', min=0, max=1, step=0.001,
+                    id='beta'
+                )
+            ]),
+            html.Div([
+                dcc.Input(
+                    placeholder='Enter a value for gamma', type='number', min=0, max=1, step=0.001,
+                    id='gamma',
+                )
+            ]),
+            html.Div([
+                dcc.Input(
+                    placeholder='Enter a value for the population', type='number',
+                    id='Population'
+                )
+            ]),
+            html.Div([
+                dcc.Graph(id='graph3')
+            ]),   
+        ]),
     ]),
 ])
+
+
 
 @app.callback(
     Output('graph1', 'figure'),
@@ -159,6 +195,95 @@ def update_map(map_day):
         )
     }
 
+@app.callback(
+    Output('graph3', 'figure'),
+    [
+        Input('pays', 'value'),
+        Input('beta', 'value'),
+        Input('gamma', 'value'),
+        Input('Population', 'value'),
+    ]
+)
+
+def SIR(pays, Population, beta, gamma):
+    print(pays)
+    if pays is not None :
+        pays=pays
+        pays_df = (epidemie_df[epidemie_df['Country/Region'] == 'pays']
+             .groupby(['Country/Region', 'day'])
+             .agg({'Confirmed': 'sum', 'Deaths': 'sum', 'Recovered': 'sum'})
+             .reset_index()
+            )
+    else:
+        pays_df = epidemie_df.groupby('day').agg({'Confirmed': 'sum', 'Deaths': 'sum', 'Recovered': 'sum'}).reset_index()
+    pays_df['infected'] = pays_df['Confirmed'].diff() 
+
+    
+    print(Population)
+    if Population is not None :
+        Population=Population
+    
+
+    
+    print(beta)
+    if beta is not None :
+        beta=beta
+    else :
+        beta=0.1
+
+        
+    print(gamma)
+    if gamma is not None :
+        gamma=gamma
+    else :
+        gamma=0.1
+    
+    
+    def SIR(t, y):
+        S = y[0]
+        I = y[1]
+        R = y[2]
+        return([-float(beta)*S*I, float(beta)*S*I-float(gamma)*I, float(gamma)*I])
+
+    solution = solve_ivp(SIR, [0, 48], [Population, 1,0], t_eval=np.arange(0, 48, 1))
+    print(pays)
+    
+    
+    
+    return {
+        'data': [
+            dict(
+                x=solution.t,
+                y=solution.y[0],
+                type='line',
+                name='Susceptible'
+            )] +([
+            
+            dict(
+                x=solution.t,
+                y=solution.y[1],
+                type='line',
+                name='Infected'
+            )]) + ([
+            
+            dict(
+                x=solution.t,
+                y=solution.y[2],
+                type='line',
+                name='Recovered'
+            )])
+        
+    }
 
 if __name__ == '__main__':
     app.run_server(debug=True)
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
